@@ -3,7 +3,7 @@
 #####################################################################################
 #Opis: Czujka w standardzie Nagios, sprawdzanie dzialania celli
 #Dzialanie: ...
-#Parametry: ./cells_ver2.py -fnCellStatus | -fnStatusDrives | -fnStatusHardDriveErrors | -fnPredictHDDFailure | -fnDriveSpace | -fnCheckBattery | -fnCheckBatteryError | -fnCheckBatteryCachePolicy | -fnCheckBatteryTemp | -fnCheckTemperature | -fnStatusASMDisk | -fnStatusStorageNodes | -fnStatusFlashDisks | -fnStatusFlashCache | -fnStatusInfiniband | -fnCheckInfinibandPort | -fnCheckMemoryErrors | -fnASMSpaceCheck | -fnCheckPSU | -fnCheckILOMErrors | -fnCheckPublicBond | -fnCheckIBBond | -fnCountFlashCache
+#Parametry: ./cells_monitoring.py -fnCellStatus | -fnStatusDrives | -fnStatusHardDriveErrors | -fnPredictHDDFailure | -fnDriveSpace | -fnCheckBattery | -fnCheckBatteryError | -fnCheckBatteryCachePolicy | -fnCheckBatteryTemp | -fnCheckTemperature | -fnStatusASMDisk | -fnStatusStorageNodes | -fnStatusFlashDisks | -fnStatusFlashCache | -fnStatusInfiniband | -fnCheckInfinibandPort | -fnCheckMemoryErrors | -fnASMSpaceCheck | -fnCheckPSU | -fnCheckILOMErrors | -fnCheckPublicBond | -fnCheckIBBond | -fnCountFlashCache
 #Autor: Piotr Stelmach (piotr.stelmach@accenture.com)
 #wersja: 1.0
 #Data ostatniej modyfikacji: 19.05.2017 
