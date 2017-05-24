@@ -1,12 +1,11 @@
 #!/usr/bin/python3.5
 
 #####################################################################################
-#Opis: Czujka w standardzie Nagios, sprawdzanie dzialania celli
-#Parametry: ./cells_ver2.py fnCellStatus | fnStatusDrives  | fnStatusHardDriveErrors | fnPredictHDDFailure | fnDriveSpace <warning> | fnCheckBattery #<warning> | fnCheckBatteryError <warning> | fnCheckBatteryCachePolicy | fnCheckBatteryTemp <warning> | fnCheckTemperature <warning> | #fnStatusASMDisk | fnStatusStorageNodes | fnStatusFlashDisks | fnStatusFlashCache | fnStatusInfiniband | fnCheckInfinibandPort | fnCheckMemoryErrors #| fnCheckPSU | fnCheckILOMErrors | fnCheckPublicBond | fnCheckIBBond | fnCountFlashCache
+#Opis: Czujka w standardzie Nagios, sprawdzanie dzialania Oracle Exadata
+#Parametry: ./cells_monitoring.py fnCellStatus | fnStatusDrives  | fnStatusHardDriveErrors | fnPredictHDDFailure | fnDriveSpace <warning> | fnCheckBattery #<warning> | fnCheckBatteryError <warning> | fnCheckBatteryCachePolicy | fnCheckBatteryTemp <warning> | fnCheckTemperature <warning> | #fnStatusASMDisk | fnStatusStorageNodes | fnStatusFlashDisks | fnStatusFlashCache | fnStatusInfiniband | fnCheckInfinibandPort | fnCheckMemoryErrors #| fnCheckPSU | fnCheckILOMErrors | fnCheckPublicBond | fnCheckIBBond | fnCountFlashCache
 #Autor: Piotr Stelmach ppiotr.stelmach@gmail.com
 #wersja: 1.0
 #Data ostatniej modyfikacji: 23.05.2017 
-#Wymagania do uruchomienia czujki: ...
 ####################################################################################
 
 import sys, getopt, os, re, uuid
