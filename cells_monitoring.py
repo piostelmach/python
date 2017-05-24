@@ -2,19 +2,16 @@
 
 #####################################################################################
 #Opis: Czujka w standardzie Nagios, sprawdzanie dzialania celli
-#Dzialanie: ...
-#Parametry: ./cells_monitoring.py -fnCellStatus | -fnStatusDrives | -fnStatusHardDriveErrors | -fnPredictHDDFailure | -fnDriveSpace | -fnCheckBattery | -fnCheckBatteryError | -fnCheckBatteryCachePolicy | -fnCheckBatteryTemp | -fnCheckTemperature | -fnStatusASMDisk | -fnStatusStorageNodes | -fnStatusFlashDisks | -fnStatusFlashCache | -fnStatusInfiniband | -fnCheckInfinibandPort | -fnCheckMemoryErrors | -fnASMSpaceCheck | -fnCheckPSU | -fnCheckILOMErrors | -fnCheckPublicBond | -fnCheckIBBond | -fnCountFlashCache
-#Autor: Piotr Stelmach (piotr.stelmach@accenture.com)
+#Parametry: ./cells_ver2.py fnCellStatus | fnStatusDrives  | fnStatusHardDriveErrors | fnPredictHDDFailure | fnDriveSpace <warning> | fnCheckBattery #<warning> | fnCheckBatteryError <warning> | fnCheckBatteryCachePolicy | fnCheckBatteryTemp <warning> | fnCheckTemperature <warning> | #fnStatusASMDisk | fnStatusStorageNodes | fnStatusFlashDisks | fnStatusFlashCache | fnStatusInfiniband | fnCheckInfinibandPort | fnCheckMemoryErrors #| fnCheckPSU | fnCheckILOMErrors | fnCheckPublicBond | fnCheckIBBond | fnCountFlashCache
+#Autor: Piotr Stelmach ppiotr.stelmach@gmail.com
 #wersja: 1.0
-#Data ostatniej modyfikacji: 19.05.2017 
+#Data ostatniej modyfikacji: 23.05.2017 
 #Wymagania do uruchomienia czujki: ...
 ####################################################################################
 
-from tabulate import tabulate #bilbioteka odpowiedzialna za rysowanie tabeli
 import sys, getopt, os, re, uuid
 
-opt=str(sys.argv[1])
-
+opt = str(sys.argv[1]) #parametr wejsciowy(nazwa funkcji) dla skryptu
 
 DCLI_ALL="/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root"
 DCLI_CELL="/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/cell_group -l root"
@@ -32,6 +29,14 @@ def set_nagios_status(filename): #funkcja pobiera nazwe pliku tmp, nastepnie ust
       print ("Critical")
       sys.exit(2)
 
+def set_nagios_status2(filename): #funkcja pobiera nazwe pliku tmp, nastepnie ustawia status w nagiosie
+   if 'WARNING' in open(str(filename)).read(): #jesli wystepuje slowo WARNING ustaw WARNING
+          print ("WARNING")
+          os.remove(str(filename))
+          sys.exit(1)
+   else:
+          print ("OK") #w innym przypadku OK
+          sys.exit(0)
 
 def gen_tmp_file(): #generuje i zwraca uuid wykorzystywany do nazw plikow tmp
    rand_uuid=uuid.uuid4() #utorzenie samej nazwy
@@ -62,15 +67,24 @@ def fnPredictHDDFailure():
    command.read()
    set_nagios_status(k)
    
-def fnDriveSpace(): 
-   print ("Not implemented yet")
+def fnDriveSpace(warning): 
+   k = gen_tmp_file()
+   command = os.popen("for i in `/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root df -Phl | grep -Po '\s\d+%\s' | grep -Po '\d+'`; do if [ $i -gt "+str(warning)+" ] ; then echo \"WARNING\" >> "+str(k)+" ; else echo \"OK\"; fi done ") #zapis do pliku tylko statusu warning
+   command.read()
+   set_nagios_status2(k)
+
+def fnCheckBattery(warning):
+   k = gen_tmp_file()
+   command = os.popen("for i in `/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root /opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -a0|grep \"Full Charge Capacity\" | grep -Po '\d+\smAh' | grep -Po '\d+'`; do if [ $i -lt "+str(warning)+" ] ; then echo \"WARNING\" > "+str(k)+" ; else echo \"OK\"; fi done ") # pobierz wartosc dla mAh i zapisz do 
+   command.read()
+   set_nagios_status2(k)
    
 
-def fnCheckBattery():
-   print ("Not implemented yet")
-
-def fnCheckBatteryError():
-   print ("Not implemented yet")
+def fnCheckBatteryError(warning):
+   k = gen_tmp_file()
+   command = os.popen("for i in `/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root /opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -a0|grep \"Max Error\" | grep -Po 'Max\sError:\s\d+\s\%' | grep -Po '\d+' `; do if [ $i -gt "+str(warning)+" ] ; then echo \"WARNING\" > "+str(k)+" ; else echo \"OK\"; fi done") # pobierz wartosc % bledow, jesli wieksza niz warning to zapisz Warning do pliku
+   command.read()
+   set_nagios_status2(k)
 
 def fnCheckBatteryCachePolicy():
    k = gen_tmp_file()
@@ -78,11 +92,17 @@ def fnCheckBatteryCachePolicy():
    command.read()
    set_nagios_status(k)
    
-def fnCheckBatteryTemp():
-   print ("Not implemented yet")
+def fnCheckBatteryTemp(warning):
+   k = gen_tmp_file()
+   command = os.popen("for i in `/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root  /opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -a0 | grep Temperature: | grep -Po '\d+\sC' | grep -Po '\d+'`; do if [ $i -gt "+str(warning)+" ] ; then echo \"WARNING\" > "+str(k)+" ; else echo \"OK\"; fi done") # pobierz wartosc temperatury baterii, jesli jest wieksza niz warning zapisza Warning do pliku
+   command.read()
+   set_nagios_status2(k)
 
-def fnCheckTemperature():
-   print ("Not implemented yet")
+def fnCheckTemperature(warning):
+   k = gen_tmp_file()
+   command = os.popen("for i in `/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root 'ipmitool sunoem cli \"show /SYS/T_AMB\" |grep value' | grep -Po '\d+.\d+\sdegree\sC' | grep -Po '^\d+'`; do if [ $i -gt "+str(warning)+" ] ; then echo \"WARNING\" > "+str(k)+" ; else echo \"OK\"; fi done") # pobierz wartosc temperatury, jesli jest wkiesza niz warning to zapisz Warning do pliku
+   command.read()
+   set_nagios_status2(k)
 
 def fnStatusASMDisk():
    k = gen_tmp_file()
@@ -126,12 +146,29 @@ def fnCheckMemoryErrors():
    command.read()
    set_nagios_status(k)
    
-def fnASMSpaceCheck(): #tutaj wystepuje uzycie dodatkowego skryptu check_asm.sh
-   command = os.popen("su - oracle -c \"~oracle/edba/monitoring_scripts/other_scripts/check_asm.sh $ASM_SID $ASM_ORACLE_HOME\"")
-   command.read()
    
 def fnCheckPSU():
-   print ("Not implemented yet")
+   k1 = gen_tmp_file()
+   k2 = gen_tmp_file()
+   command1 = os.popen(str(DCLI_ALL)+" 'ipmitool sunoem cli \"show /SYS/PS0\" |grep \"fault_state\" |grep -v \"OK\"' > "+str(k1))
+   command2 = os.popen(str(DCLI_ALL)+" 'ipmitool sunoem cli \"show /SYS/PS1\" |grep \"fault_state\" |grep -v \"OK\"' > "+str(k2))
+   command1.read()
+   command2.read()
+   
+   if os.stat(str(k1)).st_size == 0 and os.stat(str(k2)).st_size == 0: #jesli wygenerowany plik k1 i k2 jest pusty to jest OK
+      print ("OK")
+      os.remove(str(k1))
+      os.remove(str(k2))
+      sys.exit(0) 
+   elif os.stat(str(k1)).st_size > 0 and os.stat(str(k2)).st_size > 0: #jesli wygenerowany plik k1 i k2 cos zawiera to Critical
+      print ("Critical")
+      os.remove(str(k1))
+      os.remove(str(k2))
+      sys.exit(2) 
+   else: #w innym przypadku Warning
+      print ("Warning")
+      sys.exit(1)
+    
 
 def fnCheckILOMErrors():
    k = gen_tmp_file()
@@ -152,7 +189,6 @@ def fnCheckIBBond():
    set_nagios_status(k) 
    
 def fnCountFlashCache():
-   print (int(sys.argv[2]))
    command1 = os.popen("cat /opt/oracle.SupportTools/onecommand/cell_group | grep -v -e '^$' | wc -l")
    command2 = os.popen(str(DCLI_CELL)+" \"cellcli -e list flashcache\" | wc -l")
    cell_count = int(command1.read())
@@ -165,82 +201,53 @@ def fnCountFlashCache():
       print ("OK")
       sys.exit(0)
 
-'''def rm_tmp(): #funkcja usuwajaca plik tmp_cells
-   rm = os.popen("rm -f tmp_cells.txt")
-   rm.read()  #wykonaj'''
-   
-'''def check_process():
-    #command = os.popen("dcli -g allcells -l celladmin \"cellcli -e list cell attributes status,cellsrvStatus,msStatus,rsStatus \" > tmp_cells.txt")
-    #command.read() #wykonanie powyzszego zapytania
-  
-   with open("tmp_cells.txt") as f: #uchwyt do pliku
-    contents = f.read()
-    running = sum(1 for x in re.finditer(r"\brunning\b", contents)) #zlicza wystapienie slowa running
-    online = sum(1 for y in re.finditer(r"\bonline\b", contents)) #zlicza wystapienie slowa online
-    if running == 9 and online == 3: #oryginalne zapytanie zwraca 9 statusow running oraz 3 online, jesli true to OK
-       print ("OK")
-       rm_tmp()
-       sys.exit(0)
-    else:
-       print ("Critical") # w innym przypadku Critical
-       rm_tmp()
-       sys.exit(2)'''
-
-'''def hlp():
-    print ('\nPrzyklad.\n\n')
-    print ('Poprawne działanie komendy dcli -g allcells -l celladmin \"cellcli -e list cell attributes status,cellsrvStatus,msStatus,rsStatus\" powinno zwrocic ponizszy output:\n ')
-    print (tabulate([['exatmcell01', 'online', 'running', 'running', 'running'], ['exatmcell02', 'online', 'running', 'running', 'running'], ['exatmcell03', 'online', 'running', 'running', 'running']], headers=['Cells', 'Status', 'cellsrvStatus', 'msStatus', 'rsStatus'])+"\n")'''
-
-if opt == '-h':
-      print ('Correct use:' +str(sys.argv[0])+ ' -fnCellStatus | -fnStatusDrives | -fnStatusHardDriveErrors | -fnPredictHDDFailure | -fnDriveSpace | -fnCheckBattery | -fnCheckBatteryError | -fnCheckBatteryCachePolicy | -fnCheckBatteryTemp | -fnCheckTemperature | -fnStatusASMDisk | -fnStatusStorageNodes | -fnStatusFlashDisks | -fnStatusFlashCache | -fnStatusInfiniband | -fnCheckInfinibandPort | -fnCheckMemoryErrors | -fnASMSpaceCheck | -fnCheckPSU | -fnCheckILOMErrors | -fnCheckPublicBond | -fnCheckIBBond | -fnCountFlashCache')
+if opt == 'h':
+      print ('Correct use:' +str(sys.argv[0])+ ' fnCellStatus | fnStatusDrives | fnStatusHardDriveErrors | fnPredictHDDFailure | fnDriveSpace | fnCheckBattery | fnCheckBatteryError | fnCheckBatteryCachePolicy | fnCheckBatteryTemp | fnCheckTemperature | fnStatusASMDisk | fnStatusStorageNodes | fnStatusFlashDisks | fnStatusFlashCache | fnStatusInfiniband | fnCheckInfinibandPort | fnCheckMemoryErrors | fnCheckPSU | fnCheckILOMErrors | fnCheckPublicBond | fnCheckIBBond | fnCountFlashCache')
       sys.exit()
-elif opt == "-fnCellStatus":
+elif opt == "fnCellStatus":
          fnCellStatus()
-elif opt == "-fnStatusDrives":
+elif opt == "fnStatusDrives":
          fnStatusDrives()
-elif opt == "-fnStatusHardDriveErrors":
+elif opt == "fnStatusHardDriveErrors":
          fnStatusHardDriveErrors()
-elif opt == "-fnPredictHDDFailure":
+elif opt == "fnPredictHDDFailure":
          fnPredictHDDFailure()
-elif opt == "-fnDriveSpace":
-         fnDriveSpace()
-elif opt == "-fnCheckBattery":
-         fnCheckBattery()
-elif opt == "-fnCheckBatteryError":
-         fnCheckBatteryError()
-elif opt == "-fnCheckBatteryCachePolicy":
+elif opt == "fnDriveSpace":
+         fnDriveSpace(str(sys.argv[2]))
+elif opt == "fnCheckBattery":
+         fnCheckBattery(str(sys.argv[2]))
+elif opt == "fnCheckBatteryError":
+         fnCheckBatteryError(str(sys.argv[2]))
+elif opt == "fnCheckBatteryCachePolicy":
          fnCheckBatteryCachePolicy()
-elif opt == "-fnCheckBatteryTemp":
-         fnCheckBatteryTemp()
-elif opt == "-fnCheckTemperature":
-         fnCheckTemperature()
-elif opt == "-fnStatusASMDisk":
-         fnStatusASMDisk()
-elif opt == "-fnStatusStorageNodes":
+elif opt == "fnCheckBatteryTemp":
+         fnCheckBatteryTemp(str(sys.argv[2]))
+elif opt == "fnCheckTemperature":
+         fnCheckTemperature(str(sys.argv[2]))
+elif opt == "fnStatusASMDisk":
+         fnStatusASMDisk()		 
+elif opt == "fnStatusStorageNodes":
          fnStatusStorageNodes()
-elif opt == "-fnStatusFlashDisks":
+elif opt == "fnStatusFlashDisks":
          fnStatusFlashDisks()
-elif opt == "-fnStatusFlashCache":
+elif opt == "fnStatusFlashCache":
          fnStatusFlashCache()
-elif opt == "-fnStatusInfiniband":
+elif opt == "fnStatusInfiniband":
          fnStatusInfiniband()
-elif opt == "-fnCheckInfinibandPort":
+elif opt == "fnCheckInfinibandPort":
          fnCheckInfinibandPort()
-elif opt == "-fnCheckMemoryErrors":
+elif opt == "fnCheckMemoryErrors":
          fnCheckMemoryErrors()
-elif opt == "-fnASMSpaceCheck":
-         fnASMSpaceCheck()
-elif opt == "-fnCheckPSU":
+elif opt == "fnCheckPSU":
          fnCheckPSU()
-elif opt == "-fnCheckILOMErrors":
+elif opt == "fnCheckILOMErrors":
          fnCheckILOMErrors()
-elif opt == "-fnCheckPublicBond":
+elif opt == "fnCheckPublicBond":
          fnCheckPublicBond()
-elif opt == "-fnCheckIBBond":
+elif opt == "fnCheckIBBond":
          fnCheckIBBond()
-elif opt == "-fnCountFlashCache":
+elif opt == "fnCountFlashCache":
          fnCountFlashCache()
          
 else:
-   print ('Correct use:' +str(sys.argv[0])+ ' -fnCellStatus | -fnStatusDrives | -fnStatusHardDriveErrors | -fnPredictHDDFailure | -fnDriveSpace | -fnCheckBattery | -fnCheckBatteryError | -fnCheckBatteryCachePolicy | -fnCheckBatteryTemp | -fnCheckTemperature | -fnStatusASMDisk | -fnStatusStorageNodes | -fnStatusFlashDisks | -fnStatusFlashCache | -fnStatusInfiniband | -fnCheckInfinibandPort | -fnCheckMemoryErrors | -fnASMSpaceCheck | -fnCheckPSU | -fnCheckILOMErrors | -fnCheckPublicBond | -fnCheckIBBond | -fnCountFlashCache')
-
+   print ('Correct use:' +str(sys.argv[0])+ ' fnCellStatus | fnStatusDrives | fnStatusHardDriveErrors | fnPredictHDDFailure | fnDriveSpace | fnCheckBattery | fnCheckBatteryError | fnCheckBatteryCachePolicy | fnCheckBatteryTemp | fnCheckTemperature | fnStatusASMDisk | fnStatusStorageNodes | fnStatusFlashDisks | fnStatusFlashCache | fnStatusInfiniband | fnCheckInfinibandPort | fnCheckMemoryErrors | fnCheckPSU | fnCheckILOMErrors | fnCheckPublicBond | fnCheckIBBond | fnCountFlashCache')
