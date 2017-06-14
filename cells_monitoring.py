@@ -1,24 +1,19 @@
-#!/usr/bin/python3.5
-
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 #####################################################################################
-#Opis: Czujka w standardzie Nagios, sprawdzanie dzialania Oracle Exadata
-#Parametry: ./cells_monitoring.py fnCellStatus | fnStatusDrives  | fnStatusHardDriveErrors | fnPredictHDDFailure | fnDriveSpace <warning> | fnCheckBattery #<warning> | fnCheckBatteryError <warning> | fnCheckBatteryCachePolicy | fnCheckBatteryTemp <warning> | fnCheckTemperature <warning> | #fnStatusASMDisk | fnStatusStorageNodes | fnStatusFlashDisks | fnStatusFlashCache | fnStatusInfiniband | fnCheckInfinibandPort | fnCheckMemoryErrors #| fnCheckPSU | fnCheckILOMErrors | fnCheckPublicBond | fnCheckIBBond | fnCountFlashCache
-#Autor: Piotr Stelmach ppiotr.stelmach@gmail.com
-#wersja: 1.0
-#Data ostatniej modyfikacji: 23.05.2017 
+#Opis: Czujka w standardzie Nagios, sprawdzanie dzialania celli
+#Parametry: ./cells_ver2.py fnCellStatus <cellname> | fnStatusDrives | fnStatusHardDriveErrors | fnPredictHDDFailure <cellname> | fnDriveSpace <warning> <critical> <fs_name> | fnCheckTemperature <warning> | fnStatusASMDisk <cellname> | fnStatusStorageNodes <cellname> | fnStatusFlashDisks <cellname> | fnStatusFlashCache <cellname> | fnStatusInfiniband | fnCheckInfiniband | fnCheckMemoryErrors | fnCheckPSU | fnCheckILOMErrors | fnCheckPublicBond | fnCountFlashCache
+#Autor: Piotr Stelmach ppiotr[dot]stelmach[at]gmail[dot]com
+#wersja: 1.0.3
+#Data ostatniej modyfikacji: 07.06.2017 
+#
 ####################################################################################
 
 import sys, getopt, os, re, uuid
 
-opt = str(sys.argv[1]) #parametr wejsciowy(nazwa funkcji) dla skryptu
+username="root" #uzytkownik wykorzystywany do nawiazania połaczeń do serwerów exadaty
 
-DCLI_ALL="/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root"
-DCLI_CELL="/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/cell_group -l root"
-DCLI_DB="/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/dbs_group -l root"
-GRID_HOME="/u01/app/12.2.0.1/grid"
-
-
-def set_nagios_status(filename): #funkcja pobiera nazwe pliku tmp, nastepnie ustawia status w nagiosie
+def set_nagios_status1(filename): #funkcja pobiera nazwe pliku tmp, nastepnie ustawia status w nagiosie OK | CRITICAL
    if os.stat(str(filename)).st_size == 0: #jesli plik jest pusty
       os.remove(str(filename))
       print ("OK")
@@ -28,225 +23,274 @@ def set_nagios_status(filename): #funkcja pobiera nazwe pliku tmp, nastepnie ust
       print ("Critical")
       sys.exit(2)
 
-def set_nagios_status2(filename): #funkcja pobiera nazwe pliku tmp, nastepnie ustawia status w nagiosie
-   if 'WARNING' in open(str(filename)).read(): #jesli wystepuje slowo WARNING ustaw WARNING
-          print ("WARNING")
-          os.remove(str(filename))
-          sys.exit(1)
-   else:
-          print ("OK") #w innym przypadku OK
-          sys.exit(0)
+def set_nagios_status2(filename): #funkcja pobiera nazwe pliku tmp, nastepnie ustawia status w nagiosie OK | WARNING | CRITICAL, wykorzystane przy celli
+   if os.stat(str(filename)).st_size == 0: #jesli plik jest pusty
+      os.remove(str(filename))
+      print ("OK")
+      sys.exit(0)
+   if os.stat(str(filename)).st_size >= 1: #jesli cos zapisalo sie do pliku to sprawdz czy wystepuje slowo offline dotyczace statusu celli
+      if 'offline' in open(filename).read():
+         os.remove(str(filename))
+         print("Critical | status cells is offline")
+         sys.exit(2)
+      else:
+         f = open(filename,'r') #otworz plik do odczytu
+         file_contents = f.read()
+         print("Warning | "+str(file_contents))
+         f.close()
+         os.remove(str(filename))
+         sys.exit(1)
 
+def set_nagios_status3(filename): #funkcja pobiera nazwe pliku tmp, nastepnie ustawia status w nagiosie OK | WARNING
+   if os.stat(str(filename)).st_size == 0: #jesli plik jest pusty
+      os.remove(str(filename))
+      print ("OK")
+      sys.exit(0)
+   else: #jesli co zapisalo sie do pliku
+      f = open(filename,'r') #otworz plik do odczytu
+      file_contents = f.read()
+      print("Warning | "+str(file_contents))
+      f.close()
+      os.remove(str(filename))
+      sys.exit(1)
+
+def set_nagios_status4(filename): #funkcja pobiera nazwe pliku tmp, nastepnie ustawia status w nagiosie OK | WARNING
+   if os.stat(str(filename)).st_size == 0: #jesli plik jest pusty
+      os.remove(str(filename))
+      print ("OK")
+      sys.exit(0)
+   else: #jesli co zapisalo sie do pliku
+      f = open(filename,'r') #otworz plik do odczytu
+      file_contents = f.read()
+      print("Critical | "+str(file_contents))
+      f.close()
+      os.remove(str(filename))
+      sys.exit(2)
+   
 def gen_tmp_file(): #generuje i zwraca uuid wykorzystywany do nazw plikow tmp
    rand_uuid=uuid.uuid4() #utorzenie samej nazwy
    os.mknod(str(rand_uuid)) #plik uuid zostaje utworzony
    return rand_uuid #return nazwy pliku uuid
 
-def fnCellStatus():
-   k = gen_tmp_file()
-   command = os.popen(str(DCLI_CELL)+" cellcli -e list cell detail|grep -i stat|sort +1 -2|egrep -v '(running|off|normal|online|success)' > "+str(k))
-   command.read()
-   set_nagios_status(k)
-   
-def fnStatusDrives():
-   k = gen_tmp_file()
-   command = os.popen(str(DCLI_ALL)+" /opt/MegaRAID/MegaCli/MegaCli64 PDList -aAll|grep \"Firmware state\"|egrep -v '(Online, Spun Up|Hotspare, Spun Up|Hotspare, Spun down)' > "+str(k))
-   command.read()
-   set_nagios_status(k)
 
-def fnStatusHardDriveErrors():
+def fnCellStatus(cellname):
    k = gen_tmp_file()
-   command = os.popen(str(DCLI_ALL)+" /opt/MegaRAID/MegaCli/MegaCli64 PDList -aAll|egrep '(Error|Failure)' | egrep -v '(Count: 0|Number: 0)' > "+str(k))
-   command.read()
-   set_nagios_status(k)
-
-def fnPredictHDDFailure():
-   k = gen_tmp_file()
-   command = os.popen(str(DCLI_CELL)+" cellcli -e list physicaldisk | grep -v normal > "+str(k))
-   command.read()
-   set_nagios_status(k)
-   
-def fnDriveSpace(warning): 
-   k = gen_tmp_file()
-   command = os.popen("for i in `/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root df -Phl | grep -Po '\s\d+%\s' | grep -Po '\d+'`; do if [ $i -gt "+str(warning)+" ] ; then echo \"WARNING\" >> "+str(k)+" ; else echo \"OK\"; fi done ") #zapis do pliku tylko statusu warning
-   command.read()
-   set_nagios_status2(k)
-
-def fnCheckBattery(warning):
-   k = gen_tmp_file()
-   command = os.popen("for i in `/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root /opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -a0|grep \"Full Charge Capacity\" | grep -Po '\d+\smAh' | grep -Po '\d+'`; do if [ $i -lt "+str(warning)+" ] ; then echo \"WARNING\" > "+str(k)+" ; else echo \"OK\"; fi done ") # pobierz wartosc dla mAh i zapisz do 
+   command = os.popen("dcli -l "+str(username)+" -c "+str(cellname)+" cellcli -e list cell detail|grep -i stat|sort +1 -2|egrep -v '(running|off|normal|online|success)' |cut -d ' ' -f2- > "+str(k))
    command.read()
    set_nagios_status2(k)
    
+def fnStatusDrives(srvname):
+   row = 1 #zmienna bedzie okreslac poziom wiersza w pliku, inicjalizacja od 1 (pierwszy wiersz pliku k1)
+   k1 = gen_tmp_file() # generowany output z glownej komendy MegaCli64 PDList
+   k2 = gen_tmp_file() # jesli w pliku k1 znajdzie sie jakis offline to wrzuci nazwe dysku to pliku k2
+   command1 = os.popen("dcli -l "+str(username)+" -c "+str(srvname)+" /opt/MegaRAID/MegaCli/MegaCli64 PDList -aAll|egrep '(Firmware state|Inquiry)'|egrep -v '(Online, Spun Up|Hotspare, Spun Up|Hotspare, Spun down)' |cut -d ' ' -f2- > "+str(k1))
+   command1.read()
+   
+   file = open(str(k1), "r") #uchwyt do pliku k1 ktory bedziemy walidowac
+   
+   for line in file:
+      row+=1 #przejdz wiersz nizej
+      if "Offline" in line:  #jesli w pliku k1 wystapi slowo "Offline"
+         command2=os.popen("sed '"+str(row)+"q;d' "+str(k1)+" | awk {'print $5'} >> "+str(k2)) #zapisz do pliku k2 nazwe dysku ktory jest Offline
+         command2.read() #wykonaj komende
+      else:
+         pass
+   file.close()	 
+   
+   if os.stat(str(k2)).st_size > 0:#jesli plik k2 istnieje
+      f = open(str(k2),'r') #otworz plik do odczytu
+      file_contents = f.read()
+      print("Warning | "+str(file_contents))
+      f.close()
+      os.remove(str(k1))
+      os.remove(str(k2))
+      sys.exit(1)
+   else: # jesli pliku k2 nie ma
+      print ("OK")
+      os.remove(str(k1))
+      os.remove(str(k2))
+      sys.exit(0)
+   
 
-def fnCheckBatteryError(warning):
+def fnStatusHardDriveErrors(srvname):
    k = gen_tmp_file()
-   command = os.popen("for i in `/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root /opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -a0|grep \"Max Error\" | grep -Po 'Max\sError:\s\d+\s\%' | grep -Po '\d+' `; do if [ $i -gt "+str(warning)+" ] ; then echo \"WARNING\" > "+str(k)+" ; else echo \"OK\"; fi done") # pobierz wartosc % bledow, jesli wieksza niz warning to zapisz Warning do pliku
+   command = os.popen("dcli -l "+str(username)+" -c "+str(srvname)+" /opt/MegaRAID/MegaCli/MegaCli64 PDList -aAll|egrep '(Error|Failure)' | egrep -v '(Count: 0|Number: 0)' |cut -d ' ' -f2- > "+str(k))
    command.read()
-   set_nagios_status2(k)
+   set_nagios_status3(k)
 
-def fnCheckBatteryCachePolicy():
+def fnPredictHDDFailure(cellname): ###dcli: error: no such option: -e##
    k = gen_tmp_file()
-   command = os.popen(str(DCLI_ALL)+" /opt/MegaRAID/MegaCli/MegaCli64 -LDInfo -Lall -aALL |grep 'Cache Policy' |grep -i current |grep -v WriteBack > "+str(k))
+   command = os.popen("dcli -l "+str(username)+" -c "+str(cellname)+" -e list physicaldisk | grep -v normal | cut -d ' ' -f2- > "+str(k))
    command.read()
-   set_nagios_status(k)
+   set_nagios_status3(k)
    
-def fnCheckBatteryTemp(warning):
+def fnDriveSpace(srvname, warning, critical, fs_mounted_on): #funkcja pobiera prog warning, prog ciritcal, nazwa filesystemu
    k = gen_tmp_file()
-   command = os.popen("for i in `/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root  /opt/MegaRAID/MegaCli/MegaCli64 -AdpBbuCmd -a0 | grep Temperature: | grep -Po '\d+\sC' | grep -Po '\d+'`; do if [ $i -gt "+str(warning)+" ] ; then echo \"WARNING\" > "+str(k)+" ; else echo \"OK\"; fi done") # pobierz wartosc temperatury baterii, jesli jest wieksza niz warning zapisza Warning do pliku
+   command = os.popen("dcli -l "+str(username)+" -c "+str(srvname)+" df -h | grep -P '(^|\s)\K"+str(fs_mounted_on)+"(?=\s|$)'| tr -d '%' | awk '{print $5}' > "+str(k)) #szukaj dokladnie podanego wzorca
    command.read()
-   set_nagios_status2(k)
+   
+   f = open(str(k))
+   count = f.read()
+   
+   if int(count) >= int(warning) and int(count) <= int(critical):
+      print("Warning | filesystem: "+str(count).rstrip()+"%") #rstrip() usuwa biale znaki, nowa linie, tab..
+      os.remove(str(k))
+      sys.exit(1)
+   elif int(count) >= int(critical) and int(count) > int(warning):
+      print("Critical | filesystem: "+str(count).rstrip()+"%")
+      os.remove(str(k))
+      sys.exit(2)
+   else:
+      print("Ok | filesystem: "+str(count).rstrip()+"%")
+      os.remove(str(k))
+      sys.exit(0)
+   
+def fnCheckTemperature(srvname, warning):#funkcja pobiera prog warning ## Could not open device at /dev/ipmi0 or /dev/ipmi/0 or /dev/ipmidev/0: 
+   k = gen_tmp_file()
+   command = os.popen("dcli -l "+str(username)+" -c "+str(srvname)+" \"ipmitool sunoem cli show\ /SYS/T_AMB |grep value | grep -Po '\d+.\d+\sdegree\sC' | grep -Po '^\d+'\" |cut -d ' ' -f2- > "+str(k))
+   command.read()
+   
+   f = open(str(k))
+   count = f.read()
+   
+   if int(count) >= int(warning):
+      print("Warning | temperature: "+str(count).rstrip()+"C")
+      os.remove(str(k))
+      sys.exit(1)
+   else:
+      print("Ok | temperature: "+str(count).rstrip()+"C")
+      os.remove(str(k))
+      sys.exit(0)
 
-def fnCheckTemperature(warning):
+def fnStatusASMDisk(cellname): ##dcli: error: no such option: -e
    k = gen_tmp_file()
-   command = os.popen("for i in `/usr/local/bin/dcli -g /opt/oracle.SupportTools/onecommand/all_group -l root 'ipmitool sunoem cli \"show /SYS/T_AMB\" |grep value' | grep -Po '\d+.\d+\sdegree\sC' | grep -Po '^\d+'`; do if [ $i -gt "+str(warning)+" ] ; then echo \"WARNING\" > "+str(k)+" ; else echo \"OK\"; fi done") # pobierz wartosc temperatury, jesli jest wkiesza niz warning to zapisz Warning do pliku
+   command = os.popen("dcli -l "+str(username)+" -c "+str(cellname)+"cellcli -e list griddisk attributes name, ASMDeactivationOutcome, ASMModeStatus | grep -v ONLINE |cut -d ' ' -f2- > "+str(k))
    command.read()
-   set_nagios_status2(k)
-
-def fnStatusASMDisk():
+   set_nagios_status3(k)
+   
+def fnStatusStorageNodes(cellname): ## dcli: error: no such option: -e
    k = gen_tmp_file()
-   command = os.popen(str(DCLI_CELL)+" cellcli -e list griddisk attributes name, ASMDeactivationOutcome, ASMModeStatus | grep -v ONLINE > "+str(k))
+   command = os.popen("dcli -l "+str(username)+" -c "+str(cellname)+"cellcli -e \"list metriccurrent attributes all where objectType = \'CELL\' \" |grep -v normal |cut -d ' ' -f2- > "+str(k))
    command.read()
-   set_nagios_status(k)
+   set_nagios_status3(k)
    
-def fnStatusStorageNodes():
+def fnStatusFlashDisks(cellname): ##dcli: error: no such option: -e
    k = gen_tmp_file()
-   command = os.popen(str(DCLI_CELL)+" cellcli -e \"list metriccurrent attributes all where objectType = \'CELL\' \" |grep -v normal > "+str(k))
+   command = os.popen("dcli -l "+str(username)+" -c "+str(cellname)+"cellcli -e \"list celldisk where disktype=flashdisk\" | grep -v normal |cut -d ' ' -f2- > "+str(k))
    command.read()
-   set_nagios_status(k)
+   set_nagios_status3(k)
    
-def fnStatusFlashDisks():
+def fnStatusFlashCache(cellname): ## 
    k = gen_tmp_file()
-   command = os.popen(str(DCLI_CELL)+" cellcli -e \"list celldisk where disktype=flashdisk\" | grep -v normal > "+str(k))
+   command = os.popen("dcli -l "+str(username)+" -c "+str(cellname)+"cellcli -e \"list flashcache detail\" |egrep \"status|size\" | grep -v \"normal\" | grep -v \"5.817901611328125T\" |cut -d ' ' -f2- > "+str(k))
    command.read()
-   set_nagios_status(k)
+   set_nagios_status3(k)
    
-def fnStatusFlashCache():
+def fnStatusInfiniband(srvname): ##Error: No command specified.
    k = gen_tmp_file()
-   command = os.popen(str(DCLI_CELL)+" cellcli -e \"list flashcache detail\" |egrep \"status|size\" | grep -v \"normal\" | grep -v \"364.75G\" > "+str(k))
+   command = os.popen("dcli -l "+str(username)+" -c "+str(srvname)+"ibstatus | grep state | egrep -v '(LinkUp|ACIVE)' | grep -v \"4: ACTIVE\" |cut -d ' ' -f2- > "+str(k))
    command.read()
-   set_nagios_status(k)
+   set_nagios_status3(k)
    
-def fnStatusInfiniband():
+def fnCheckInfiniband(srvname): 
    k = gen_tmp_file()
-   command = os.popen(str(DCLI_ALL)+" ibstatus | grep state | egrep -v '(LinkUp|ACIVE)' | grep -v \"4: ACTIVE\" > "+str(k))
+   command = os.popen("dcli -l "+str(username)+" -c "+str(srvname)+"/opt/oracle.SupportTools/ibdiagtools/verify-topology |sed '1d' |egrep -v '(SUCCESS|NOT APPLICABLE)' |cut -d ' ' -f2- > "+str(k))
    command.read()
-   set_nagios_status(k)
+   set_nagios_status3(k)
    
-def fnCheckInfinibandPort():
+def fnCheckMemoryErrors(srvname):
    k = gen_tmp_file()
-   command = os.popen(str(DCLI_ALL)+" ibcheckstate | grep \"#\" | egrep -v '(0 bad nodes found|0 ports with bad state found)' > "+str(k))
+   command = os.popen("dcli -l "+str(username)+" -c "+str(srvname)+"ipmitool sel list | grep PCI | cut -f1 -d : | sort -u |cut -d ' ' -f2- > "+str(k))
    command.read()
-   set_nagios_status(k)
-   
-def fnCheckMemoryErrors():
-   k = gen_tmp_file()
-   command = os.popen(str(DCLI_ALL)+" ipmitool sel list | grep ECC | cut -f1 -d : | sort -u > "+str(k))
-   command.read()
-   set_nagios_status(k)
-   
-   
-def fnCheckPSU():
+   set_nagios_status3(k)
+     
+def fnCheckPSU(srvname):
    k1 = gen_tmp_file()
    k2 = gen_tmp_file()
-   command1 = os.popen(str(DCLI_ALL)+" 'ipmitool sunoem cli \"show /SYS/PS0\" |grep \"fault_state\" |grep -v \"OK\"' > "+str(k1))
-   command2 = os.popen(str(DCLI_ALL)+" 'ipmitool sunoem cli \"show /SYS/PS1\" |grep \"fault_state\" |grep -v \"OK\"' > "+str(k2))
+   command1 = os.popen("dcli -l "+str(username)+" -c "+str(srvname)+" 'ipmitool sunoem cli show\ /SYS/PS0 |grep fault_state |grep -v \"OK\"' > "+str(k1))
+   command2 = os.popen("dcli -l "+str(username)+" -c "+str(srvname)+" 'ipmitool sunoem cli show\ /SYS/PS1 |grep fault_state |grep -v \"OK\"' > "+str(k2))
    command1.read()
    command2.read()
    
    if os.stat(str(k1)).st_size == 0 and os.stat(str(k2)).st_size == 0: #jesli wygenerowany plik k1 i k2 jest pusty to jest OK
-      print ("OK")
+      print ("OK | PS1 and PS0 are UP")
       os.remove(str(k1))
       os.remove(str(k2))
       sys.exit(0) 
-   elif os.stat(str(k1)).st_size > 0 and os.stat(str(k2)).st_size > 0: #jesli wygenerowany plik k1 i k2 cos zawiera to Critical
-      print ("Critical")
+   elif os.stat(str(k1)).st_size > 0 and os.stat(str(k2)).st_size == 0: #jesli wygenerowany plik k1 cos zawiera
+      print ("Warning | PS0 down")
       os.remove(str(k1))
       os.remove(str(k2))
-      sys.exit(2) 
-   else: #w innym przypadku Warning
-      print ("Warning")
+      sys.exit(1) 
+   elif os.stat(str(k1)).st_size == 0 and os.stat(str(k2)).st_size > 0: #jesli wygenerowany plik k2 cos zawiera
+      print ("Warning | PS1 down")
+      os.remove(str(k1))
+      os.remove(str(k2))
       sys.exit(1)
-    
+   else: #w innym przypadku Critical
+      print ("Critical | PS1 and PS2 are DOWN")
+      os.remove(str(k1))
+      os.remove(str(k2))
+      sys.exit(2)
 
-def fnCheckILOMErrors():
+def fnCheckILOMErrors(srvname):
    k = gen_tmp_file()
-   command = os.popen(str(DCLI_ALL)+" 'ipmitool sunoem cli \"show faulty\" | grep -v \"| Property\" | grep -v \"\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\" | grep -v \"Connected\" | grep -v \"show faulty\" | grep -v \"Session closed\" | grep -v \"Disconnected\" | grep \"|\"' > "+str(k))
+   command = os.popen("dcli -l "+str(username)+" -c "+str(srvname)+"'ipmitool sunoem cli show\ faulty | egrep -v '(Connected|show faulty|closed|Disconnected)' > "+str(k))
    command.read()
-   set_nagios_status(k)
+   set_nagios_status3(k)
 
 def fnCheckPublicBond():
    k = gen_tmp_file()
-   command = os.popen(str(DCLI_DB)+" cat /proc/net/bonding/${bondedPubIface} | grep \"MII Stat\" | grep -v up > "+str(k))
+   command = os.popen("cat /proc/net/bonding/bondeth0 | grep 'MII Stat' | grep -v up > "+str(k))
    command.read()
-   set_nagios_status(k) 
-   
-def fnCheckIBBond():
-   k = gen_tmp_file()
-   command = os.popen(str(DCLI_DB)+" cat /proc/net/bonding/${bondedIBIface} | grep \"MII Stat\" | grep -v up > "+str(k))
-   command.read()
-   set_nagios_status(k) 
+   set_nagios_status4(k) 
    
 def fnCountFlashCache():
    command1 = os.popen("cat /opt/oracle.SupportTools/onecommand/cell_group | grep -v -e '^$' | wc -l")
-   command2 = os.popen(str(DCLI_CELL)+" \"cellcli -e list flashcache\" | wc -l")
+   command2 = os.popen("dcli -l "+str(username)+" -g /opt/oracle.SupportTools/onecommand/cell_group list flashcache | wc -l")
    cell_count = int(command1.read())
    flash_cache_count = int(command2.read())
    
    if cell_count != flash_cache_count:
-      print ("Warning")
+      print ("Warning | cell_count: "+str(cell_count)+ " | flashe_cache_count: "+str(flash_cache_count))
       sys.exit(1)
    else:
       print ("OK")
       sys.exit(0)
 
-if opt == 'h':
-      print ('Correct use:' +str(sys.argv[0])+ ' fnCellStatus | fnStatusDrives | fnStatusHardDriveErrors | fnPredictHDDFailure | fnDriveSpace | fnCheckBattery | fnCheckBatteryError | fnCheckBatteryCachePolicy | fnCheckBatteryTemp | fnCheckTemperature | fnStatusASMDisk | fnStatusStorageNodes | fnStatusFlashDisks | fnStatusFlashCache | fnStatusInfiniband | fnCheckInfinibandPort | fnCheckMemoryErrors | fnCheckPSU | fnCheckILOMErrors | fnCheckPublicBond | fnCheckIBBond | fnCountFlashCache')
-      sys.exit()
-elif opt == "fnCellStatus":
-         fnCellStatus()
-elif opt == "fnStatusDrives":
-         fnStatusDrives()
-elif opt == "fnStatusHardDriveErrors":
-         fnStatusHardDriveErrors()
-elif opt == "fnPredictHDDFailure":
-         fnPredictHDDFailure()
-elif opt == "fnDriveSpace":
-         fnDriveSpace(str(sys.argv[2]))
-elif opt == "fnCheckBattery":
-         fnCheckBattery(str(sys.argv[2]))
-elif opt == "fnCheckBatteryError":
-         fnCheckBatteryError(str(sys.argv[2]))
-elif opt == "fnCheckBatteryCachePolicy":
-         fnCheckBatteryCachePolicy()
-elif opt == "fnCheckBatteryTemp":
-         fnCheckBatteryTemp(str(sys.argv[2]))
-elif opt == "fnCheckTemperature":
-         fnCheckTemperature(str(sys.argv[2]))
-elif opt == "fnStatusASMDisk":
-         fnStatusASMDisk()		 
-elif opt == "fnStatusStorageNodes":
-         fnStatusStorageNodes()
-elif opt == "fnStatusFlashDisks":
-         fnStatusFlashDisks()
-elif opt == "fnStatusFlashCache":
-         fnStatusFlashCache()
-elif opt == "fnStatusInfiniband":
-         fnStatusInfiniband()
-elif opt == "fnCheckInfinibandPort":
-         fnCheckInfinibandPort()
-elif opt == "fnCheckMemoryErrors":
-         fnCheckMemoryErrors()
-elif opt == "fnCheckPSU":
-         fnCheckPSU()
-elif opt == "fnCheckILOMErrors":
-         fnCheckILOMErrors()
-elif opt == "fnCheckPublicBond":
+if str(sys.argv[1]) == "fnCellStatus":
+         fnCellStatus(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnStatusDrives":
+         fnStatusDrives(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnStatusHardDriveErrors":
+         fnStatusHardDriveErrors(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnPredictHDDFailure":
+         fnPredictHDDFailure(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnDriveSpace":
+         fnDriveSpace(str(sys.argv[2]),str(sys.argv[3]),str(sys.argv[4]),str(sys.argv[5]))
+elif str(sys.argv[1]) == "fnCheckTemperature":
+         fnCheckTemperature(str(sys.argv[2]),str(sys.argv[3]))
+elif str(sys.argv[1]) == "fnStatusASMDisk":
+         fnStatusASMDisk(str(sys.argv[2]))		 
+elif str(sys.argv[1]) == "fnStatusStorageNodes":
+         fnStatusStorageNodes(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnStatusFlashDisks":
+         fnStatusFlashDisks(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnStatusFlashCache":
+         fnStatusFlashCache(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnStatusInfiniband":
+         fnStatusInfiniband(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnCheckInfiniband":
+         fnCheckInfiniband(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnCheckMemoryErrors":
+         fnCheckMemoryErrors(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnCheckPSU":
+         fnCheckPSU(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnCheckILOMErrors":
+         fnCheckILOMErrors(str(sys.argv[2]))
+elif str(sys.argv[1]) == "fnCheckPublicBond":
          fnCheckPublicBond()
-elif opt == "fnCheckIBBond":
-         fnCheckIBBond()
-elif opt == "fnCountFlashCache":
+elif str(sys.argv[1]) == "fnCountFlashCache":
          fnCountFlashCache()
-         
 else:
-   print ('Correct use:' +str(sys.argv[0])+ ' fnCellStatus | fnStatusDrives | fnStatusHardDriveErrors | fnPredictHDDFailure | fnDriveSpace | fnCheckBattery | fnCheckBatteryError | fnCheckBatteryCachePolicy | fnCheckBatteryTemp | fnCheckTemperature | fnStatusASMDisk | fnStatusStorageNodes | fnStatusFlashDisks | fnStatusFlashCache | fnStatusInfiniband | fnCheckInfinibandPort | fnCheckMemoryErrors | fnCheckPSU | fnCheckILOMErrors | fnCheckPublicBond | fnCheckIBBond | fnCountFlashCache')
+      print ('Correct use:' +str(sys.argv[0])+ ' fnCellStatus <cellname> | fnStatusDrives <srvname>| fnStatusHardDriveErrors <srvname> | fnPredictHDDFailure <cellname> | fnDriveSpace <srvname> <warning> <critical> <fs_name> | fnCheckTemperature <warning> | fnStatusASMDisk <cellname> | fnStatusStorageNodes <cellname> | fnStatusFlashDisks <cellname> | fnStatusFlashCache <cellname> | fnStatusInfiniband <srvname> | fnCheckInfiniband <srvname> | fnCheckMemoryErrors <srvname> | fnCheckPSU <srvname> | fnCheckILOMErrors <srvname> | fnCheckPublicBond | fnCountFlashCache')
